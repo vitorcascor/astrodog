@@ -1,0 +1,26 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+
+# Node
+node_modules/
+npm-debug.log
+
+# Tailwind build
+/static/css/output.css
+
+# VS Code
+.vscode/
+
+# Docker
+*.log
+*.pid
+*.sock
+.env
+.env.*
+*.db
+/media/
