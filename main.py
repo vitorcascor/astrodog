@@ -16,29 +16,54 @@ longitude = float(-43.2096)  # Rio de Janeiro
 # =============================================================================
 # PROCESSAMENTO DE DATA E HORA
 # =============================================================================
-# Converte string de data/hora para objeto datetime
 birth_date = datetime.datetime.strptime(f"{date_input} {time_input}", "%Y-%m-%d %H:%M")
 
-# Configura timezone com fallback para UTC
 try:
     timezone = pytz.timezone(timezone_input)
 except pytz.UnknownTimeZoneError:
     print("Timezone inválida. Usando UTC por padrão.")
     timezone = pytz.utc
 
-# Aplica timezone local e converte para UTC
 birth_date = timezone.localize(birth_date)
 utc_birth_date = birth_date.astimezone(pytz.utc)
 
-# Calcula Dia Juliano (formato usado pela Swiss Ephemeris)
 jd = swe.julday(utc_birth_date.year, utc_birth_date.month, utc_birth_date.day,
                 utc_birth_date.hour + utc_birth_date.minute / 60.0)
 
 # =============================================================================
 # CONSTANTES ASTROLÓGICAS
 # =============================================================================
+planet_symbols = {
+    'Sun': '☉',      # Sol
+    'Moon': '☽',     # Lua
+    'Mercury': '☿',  # Mercúrio
+    'Venus': '♀',    # Vênus
+    'Mars': '♂',     # Marte
+    'Jupiter': '♃',  # Júpiter
+    'Saturn': '♄',   # Saturno
+    'Uranus': '♅',   # Urano
+    'Neptune': '♆',  # Netuno
+    'Pluto': '♇'     # Plutão
+}
+
+sign_unicode_symbols = {
+    'Aries': '♈',
+    'Taurus': '♉',
+    'Gemini': '♊',
+    'Cancer': '♋',
+    'Leo': '♌',
+    'Virgo': '♍',
+    'Libra': '♎',
+    'Scorpio': '♏',
+    'Sagittarius': '♐',
+    'Capricorn': '♑',
+    'Aquarius': '♒',
+    'Pisces': '♓'
+}
+
 planets = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter',
            'Saturn', 'Uranus', 'Neptune', 'Pluto']
+
 signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
          'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
 
@@ -49,36 +74,22 @@ print(f"\nMapa astral para {birth_date} (UTC: {utc_birth_date})\n")
 # =============================================================================
 planet_positions = []
 for i, name in enumerate(planets):
-    lon, lat, dist = swe.calc_ut(jd, i, swe.FLG_SWIEPH)[0][:3]
-    sign_index = int(lon // 30)
-    degree_in_sign = lon % 30
-    sign_name = signs[sign_index]
+    xx = swe.calc_ut(jd, i, swe.FLG_SWIEPH)[0]
+    lon = xx[0] 
     
-    # Armazena a posição do planeta para uso posterior no gráfico
-    planet_positions.append((name, lon))
-    print(f"{name}: {degree_in_sign:.2f}° {sign_name}")
+    planet_positions.append({'name': name, 'lon': lon})
+    print(f"{name}: {lon % 30:.2f}° {signs[int(lon // 30)]}")
 
 # =============================================================================
 # ANÁLISE E DESENHO DE ASPECTOS
 # =============================================================================
 def get_aspect_info(lon1, lon2, orb=8):
-    """
-    Determina o aspecto entre duas longitudes e a cor da linha.
-    
-    Args:
-        lon1, lon2: Longitudes dos planetas (0-360°)
-        orb: Orbe permitido para o aspecto (padrão: 8°)
-    
-    Returns:
-        Tupla (nome_aspecto, cor_linha) ou None se não houver aspecto
-    """
-    # Adicionando Sextil (60°)
     aspects = {
-        "Conjunction": (0, 'red'),      # Conjunção
-        "Opposition": (180, 'red'),     # Oposição
-        "Trine": (120, 'blue'),         # Trino
-        "Square": (90, 'red'),          # Quadratura
-        "Sextile": (60, 'blue'),        # Sextil (adicionado)
+        "Conjunction": (0, 'red'), 
+        "Opposition": (180, 'red'),
+        "Trine": (120, '#008000'), 
+        "Square": (90, 'red'),    
+        "Sextile": (60, '#008000'), 
     }
     
     diff = abs(lon1 - lon2)
@@ -91,20 +102,20 @@ def get_aspect_info(lon1, lon2, orb=8):
     return None
 
 print("\nAspectos encontrados:")
-# Lista para armazenar informações dos aspectos para desenhar as linhas
 aspect_lines_info = []
 
 for i in range(len(planet_positions)):
     for j in range(i + 1, len(planet_positions)):
-        name1, lon1 = planet_positions[i]
-        name2, lon2 = planet_positions[j]
+        name1 = planet_positions[i]['name']
+        lon1 = planet_positions[i]['lon']
+        name2 = planet_positions[j]['name']
+        lon2 = planet_positions[j]['lon']
         
         aspect_info = get_aspect_info(lon1, lon2)
         if aspect_info:
             aspect_name, color = aspect_info
             print(f"{name1} {aspect_name} {name2}")
-            # Armazena as longitudes dos planetas e a cor da linha
-            aspect_lines_info.append((lon1, lon2, color))
+            aspect_lines_info.append({'planet1': name1, 'planet2': name2, 'color': color})
 
 # =============================================================================
 # SISTEMA DE CASAS (PLACIDUS)
@@ -117,7 +128,6 @@ for i in range(12):
     degree_in_sign = houses[i] % 30
     print(f"Casa {i+1}: {degree_in_sign:.2f}° {signs[sign_index]}")
 
-# Extrai Ascendente e Meio-do-Céu
 asc = ascmc[0]
 mc = ascmc[1]
 asc_sign = signs[int(asc // 30)]
@@ -131,64 +141,180 @@ print(f"Meio-do-Céu (MC): {mc % 30:.2f}° {mc_sign}")
 # =============================================================================
 fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': 'polar'})
 
-ax.set_theta_direction(1) # Sentido anti-horário
+ax.set_theta_direction(1) # Sentido anti-horário (contra-horário)
 
-# Ajuste do offset para que o Ascendente (Casa 1) esteja à esquerda (270 graus)
-# Testando com 180 - asc, que funciona bem para a maioria dos casos para alinhar Aries no topo
-# e o Ascendente à esquerda.
 theta_offset_degrees = (180 - asc + 360) % 360 
 ax.set_theta_offset(np.radians(theta_offset_degrees))
 
-
 ax.set_yticklabels([])
 ax.set_xticklabels([])
+ax.grid(False) # Remove grade padrão
 
 # =============================================================================
 # DESENHO DOS ELEMENTOS DO MAPA
 # =============================================================================
-# Desenha cúspides das casas
+# Configurações de posição e espaçamento
+planet_symbol_r = 0.96      
+degree_text_r = 0.90        
+
+# AJUSTES PARA O TRAÇO DOS PLANETAS
+planet_tick_r_outer = 1.0   
+planet_tick_r_inner = 0.98  
+planet_tick_linewidth = 1.2 
+planet_tick_linestyle = '-' 
+
+# Para o ajuste angular (lateral)
+angular_overlap_threshold_degrees = 5.0 
+angular_offset_step_degrees = 4.0      
+
+# Tamanhos das fontes
+planet_symbol_fontsize = 16 
+degree_text_fontsize = 10   
+
+# Reorganiza planetas para calcular ajustes de sobreposição angular
+processed_planets_drawing_info = []
+sorted_planets = sorted(planet_positions, key=lambda p: p['lon'])
+
+# Lógica para aplicar offsets angulares
+occupied_angular_slots = [] 
+
+for p_data in sorted_planets:
+    original_lon = p_data['lon']
+    current_lon_adjusted = original_lon 
+    
+    found_slot = False
+    max_iterations = 30 
+    iteration = 0
+    
+    while not found_slot and iteration < max_iterations:
+        potential_lon_min = (current_lon_adjusted - (angular_overlap_threshold_degrees / 2)) % 360
+        potential_lon_max = (current_lon_adjusted + (angular_overlap_threshold_degrees / 2)) % 360
+        
+        is_overlapping = False
+        for occupied_lon_min, occupied_lon_max, occupied_center_lon in occupied_angular_slots:
+            if (potential_lon_min < occupied_lon_max and potential_lon_max > occupied_lon_min) or \
+               (occupied_lon_min < potential_lon_max and occupied_lon_max > potential_lon_min):
+                is_overlapping = True
+                break
+            
+            if potential_lon_min > potential_lon_max and \
+               ((potential_lon_min <= occupied_lon_max and occupied_lon_max <= 360) or \
+                (0 <= occupied_lon_min and occupied_lon_min <= potential_lon_max)):
+                is_overlapping = True
+                break
+            
+            if occupied_lon_min > occupied_lon_max and \
+               ((occupied_lon_min <= potential_lon_max and potential_lon_max <= 360) or \
+                (0 <= potential_lon_min and potential_lon_min <= occupied_lon_max)):
+                is_overlapping = True
+                break
+
+        if is_overlapping:
+            current_lon_adjusted = (current_lon_adjusted + angular_offset_step_degrees) % 360
+        else:
+            found_slot = True
+            occupied_angular_slots.append((potential_lon_min, potential_lon_max, current_lon_adjusted))
+
+        iteration += 1
+
+    if not found_slot:
+        print(f"Aviso: Não foi possível encontrar um slot livre para {p_data['name']}. Usando a última posição calculada.")
+
+    processed_planets_drawing_info.append({
+        'name': p_data['name'],
+        'original_lon': original_lon, 
+        'adjusted_lon': current_lon_adjusted, 
+    })
+
+planet_plot_info_map = {p['name']: p for p in processed_planets_drawing_info}
+
+
+# Desenha cúspides das casas (linhas divisórias)
 for cusp_lon in houses:
     angle = np.radians(cusp_lon)
-    ax.plot([angle, angle], [0.0, 1.0], color='black', linestyle='--', linewidth=0.8)
-
-# Desenha planetas e seus rótulos
-planet_r_pos = 0.75 # Posição radial dos planetas
-for planet, lon in planet_positions:
-    angle = np.radians(lon)
-    ax.plot(angle, planet_r_pos, 'o', color='blue', markersize=6)
-    ax.text(angle, planet_r_pos + 0.05, planet, fontsize=8, ha='center', va='center')
+    ax.plot([angle, angle], [0.0, 1.0], color='black', linestyle='-', linewidth=1.5)
 
 # Desenha círculo externo (zodíaco)
-circle = plt.Circle((0, 0), 1.0, transform=ax.transData._b, fill=False, color='black', linewidth=1.5)
-ax.add_artist(circle)
+circle_outer = plt.Circle((0, 0), 1.0, transform=ax.transData._b, fill=False, color='black', linewidth=1.5)
+ax.add_artist(circle_outer)
 
-# Desenha divisões dos signos e seus rótulos
+# Desenha o círculo interno (representando o centro do mapa) mais forte
+circle_inner = plt.Circle((0, 0), 0.5, transform=ax.transData._b, fill=False, color='black', linewidth=1.5) 
+ax.add_artist(circle_inner)
+
+# === DESENHO DAS DIVISÕES DOS SIGNOS E SEUS SÍMBOLOS ===
+# AQUI ESTÁ A ALTERAÇÃO CRUCIAL!
+# Definir o raio interno e externo para as linhas de divisão dos signos
+# Elas devem ficar DENTRO da faixa dos símbolos de signos, sem tocar o círculo externo (1.0)
+# Nem invadir a área dos planetas (abaixo de planet_tick_r_inner ou planet_symbol_r)
+sign_line_r_inner = 0.985 # Começa logo após os traços dos planetas
+sign_line_r_outer = 0.995 # Termina logo antes do círculo externo principal
+
 for i in range(12):
     sign_start_lon = i * 30
     angle_start = np.radians(sign_start_lon)
-    ax.plot([angle_start, angle_start], [0.95, 1.0], color='black', linewidth=0.5)
     
+    # Linhas divisórias do signo - AGORA DENTRO DA FAIXA DOS SÍMBOLOS DOS SIGNOS
+    ax.plot([angle_start, angle_start], [sign_line_r_inner, sign_line_r_outer], 
+            color='black', linewidth=1.0)
+    
+    # Posiciona o símbolo do signo
     sign_center_lon = sign_start_lon + 15
     angle_center = np.radians(sign_center_lon)
-    ax.text(angle_center, 1.05, signs[i], fontsize=9, ha='center', va='center')
+    sign_name = signs[i]
+    sign_sym = sign_unicode_symbols.get(sign_name, '?')
+    ax.text(angle_center, 1.025, sign_sym, fontsize=18, ha='center', va='center', weight='bold')
+
+# === DESENHO DOS PLANETAS COM AJUSTES ANGULARES E TRAÇOS ===
+for p_info in processed_planets_drawing_info:
+    planet_name = p_info['name']
+    original_lon = p_info['original_lon']
+    adjusted_lon = p_info['adjusted_lon']
+
+    # Posição para o TRAÇO DE REFERÊNCIA (longitude ORIGINAL do planeta)
+    original_angle = np.radians(original_lon)
+    ax.plot([original_angle, original_angle], [planet_tick_r_inner, planet_tick_r_outer], 
+            color='black', linewidth=planet_tick_linewidth, linestyle=planet_tick_linestyle)
+    
+    # Posição para o SÍMBOLO e o TEXTO (longitude AJUSTADA para evitar sobreposição)
+    adjusted_angle = np.radians(adjusted_lon)
+    planet_symbol = planet_symbols.get(planet_name, '?')
+    
+    # Add planet symbol
+    ax.text(adjusted_angle, planet_symbol_r, planet_symbol,
+            fontsize=planet_symbol_fontsize, ha='center', va='center', weight='bold')
+    
+    # Add planet degree and minute text
+    degree_decimal = original_lon % 30 # Use a longitude ORIGINAL para o cálculo do grau
+    degrees = int(degree_decimal)
+    minutes = int((degree_decimal - degrees) * 60)
+    
+    degree_text = f"{degrees}°{minutes:02d}'" 
+    
+    ax.text(adjusted_angle, degree_text_r, degree_text, 
+            fontsize=degree_text_fontsize, ha='center', va='center') 
 
 # =============================================================================
-# DESENHO DAS LINHAS DE ASPECTO (NOVA SEÇÃO)
+# DESENHO DAS LINHAS DE ASPECTO
 # =============================================================================
-# As linhas de aspecto devem conectar os planetas.
-# A posição radial dos planetas é 'planet_r_pos'.
-# Você pode ajustar a posição radial das linhas se quiser que elas fiquem mais internas
-aspect_line_r_pos = planet_r_pos # Conectando os planetas na mesma linha radial
+for aspect_info in aspect_lines_info:
+    name1 = aspect_info['planet1']
+    name2 = aspect_info['planet2']
+    color = aspect_info['color']
 
-for lon1, lon2, color in aspect_lines_info:
+    lon1 = next(p for p in processed_planets_drawing_info if p['name'] == name1)['original_lon']
+    lon2 = next(p for p in processed_planets_drawing_info if p['name'] == name2)['original_lon']
+    
     angle1 = np.radians(lon1)
     angle2 = np.radians(lon2)
-    # Desenha uma linha entre os dois pontos (planetas)
-    ax.plot([angle1, angle2], [aspect_line_r_pos, aspect_line_r_pos], color=color, linewidth=1.5, linestyle='-')
+    
+    aspect_radial_pos = (planet_tick_r_inner + circle_inner.radius) / 2 
+    ax.plot([angle1, angle2], [aspect_radial_pos, aspect_radial_pos], 
+            color=color, linewidth=1.5, linestyle='-')
 
 # =============================================================================
 # FINALIZAÇÃO E EXIBIÇÃO
 # =============================================================================
-plt.title("Mapa Astral (Visual) com Aspectos", y=1.08, fontsize=14) # Atualiza o título
+plt.title("Mapa Astral (Visual) - Linhas de Signo Confinadas (Versão Final)", y=1.08, fontsize=14)
 plt.tight_layout()
 plt.show()
