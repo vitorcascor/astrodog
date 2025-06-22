@@ -154,17 +154,17 @@ ax.grid(False) # Remove grade padrão
 # DESENHO DOS ELEMENTOS DO MAPA
 # =============================================================================
 # Configurações de posição e espaçamento
-planet_symbol_r = 0.96      
-degree_text_r = 0.90        
+planet_symbol_r = 0.90
+degree_text_r = 0.80        
 
 # AJUSTES PARA O TRAÇO DOS PLANETAS
 planet_tick_r_outer = 1.0   
 planet_tick_r_inner = 0.98  
-planet_tick_linewidth = 1.2 
+planet_tick_linewidth = 1.5
 planet_tick_linestyle = '-' 
 
 # Para o ajuste angular (lateral)
-angular_overlap_threshold_degrees = 5.0 
+angular_overlap_threshold_degrees = 4.0 
 angular_offset_step_degrees = 4.0      
 
 # Tamanhos das fontes
@@ -242,19 +242,38 @@ ax.add_artist(circle_outer)
 circle_inner = plt.Circle((0, 0), 0.5, transform=ax.transData._b, fill=False, color='black', linewidth=1.5) 
 ax.add_artist(circle_inner)
 
+# Escrever o número de cada casa no centro angular entre cúspides
+house_number_r = 0.4  # raio onde o número será desenhado (dentro do círculo interno)
+
+for i in range(12):
+    cusp_start = houses[i]
+    cusp_end = houses[(i + 1) % 12]
+    
+    # Lidar com casos em que a cúspide passa de 360° para 0°
+    if cusp_end < cusp_start:
+        cusp_end += 360
+
+    # Calcular o ângulo central entre as cúspides
+    house_center_lon = (cusp_start + cusp_end) / 2 % 360
+    angle_center = np.radians(house_center_lon)
+    
+    # Desenhar número da casa (1 a 12)
+    ax.text(angle_center, house_number_r, str(i + 1),
+            fontsize=14, ha='center', va='center', weight='bold')
+
 # === DESENHO DAS DIVISÕES DOS SIGNOS E SEUS SÍMBOLOS ===
 # AQUI ESTÁ A ALTERAÇÃO CRUCIAL!
 # Definir o raio interno e externo para as linhas de divisão dos signos
 # Elas devem ficar DENTRO da faixa dos símbolos de signos, sem tocar o círculo externo (1.0)
 # Nem invadir a área dos planetas (abaixo de planet_tick_r_inner ou planet_symbol_r)
-sign_line_r_inner = 0.985 # Começa logo após os traços dos planetas
-sign_line_r_outer = 0.995 # Termina logo antes do círculo externo principal
+sign_line_r_inner = 1    # Começa no centro do círculo
+sign_line_r_outer = 1.03  # Termina exatamente onde o símbolo do signo está desenhado
 
 for i in range(12):
     sign_start_lon = i * 30
     angle_start = np.radians(sign_start_lon)
-    
-    # Linhas divisórias do signo - AGORA DENTRO DA FAIXA DOS SÍMBOLOS DOS SIGNOS
+
+    # Linhas divisórias dos signos - agora cortando todo o círculo dos signos e planetas
     ax.plot([angle_start, angle_start], [sign_line_r_inner, sign_line_r_outer], 
             color='black', linewidth=1.0)
     
@@ -263,7 +282,7 @@ for i in range(12):
     angle_center = np.radians(sign_center_lon)
     sign_name = signs[i]
     sign_sym = sign_unicode_symbols.get(sign_name, '?')
-    ax.text(angle_center, 1.025, sign_sym, fontsize=18, ha='center', va='center', weight='bold')
+    ax.text(angle_center, 1.040, sign_sym, fontsize=18, ha='center', va='center', weight='bold')
 
 # === DESENHO DOS PLANETAS COM AJUSTES ANGULARES E TRAÇOS ===
 for p_info in processed_planets_drawing_info:
