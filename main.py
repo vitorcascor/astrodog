@@ -4,7 +4,7 @@ import pytz
 import matplotlib.pyplot as plt
 import numpy as np
 import tkinter as tk
-from tkinter import Canvas, PhotoImage
+from tkinter import Canvas, PhotoImage # Not directly used for chart, but kept from original
 from tkinter import ttk, messagebox
 from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
@@ -13,7 +13,7 @@ import matplotlib.image as mpimg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
 # =============================================================================
-# CONSTANTES ASTROLÓGICAS (Mantidas do seu código original)
+# CONSTANTES ASTROLÓGICAS
 # =============================================================================
 planet_symbols = {
     'Sun': 'imagens/planeta-velka-bila-slunce.png',
@@ -56,11 +56,10 @@ planets = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter',
 signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
          'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
 
-# Define element colors and sign-to-element mapping
 element_colors = {
     'Fire': 'red',
     'Earth': 'green',
-    'Air': '#eb8204',
+    'Air': '#eb8204', # Orange
     'Water': 'blue'
 }
 
@@ -158,7 +157,7 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
                     utc_birth_date.hour + utc_birth_date.minute / 60.0)
 
     # =============================================================================
-    # CÁLCULO DAS POSIÇÕES PLANETÁRIAS (Mantido do seu código)
+    # CÁLCULO DAS POSIÇÕES PLANETÁRIAS
     # =============================================================================
     planet_positions = []
     for i, name in enumerate(planets):
@@ -167,15 +166,15 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
         planet_positions.append({'name': name, 'lon': lon})
 
     # =============================================================================
-    # ANÁLISE E DESENHO DE ASPECTOS (Mantido do seu código)
+    # ANÁLISE E DESENHO DE ASPECTOS
     # =============================================================================
     def get_aspect_info(lon1, lon2, orb=8):
         aspects = {
             "Conjunção": (0, 'red'),
             "Oposição": (180, 'red'),
-            "Trígono": (120, '#008000'),
+            "Trígono": (120, '#008000'), # Green
             "Quadratura": (90, 'red'),
-            "Sextil": (60, '#008000'),
+            "Sextil": (60, '#008000'), # Green
         }
 
         diff = abs(lon1 - lon2)
@@ -203,7 +202,7 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
                 textual_aspects.append(f"{name1} {planet_unicode_symbols.get(name1, '')} - {name2} {planet_unicode_symbols.get(name2, '')}: {aspect_name} ({actual_diff:.2f}°)")
 
     # =============================================================================
-    # SISTEMA DE CASAS (PLACIDUS) (Mantido do seu código)
+    # SISTEMA DE CASAS (PLACIDUS)
     # =============================================================================
     houses, ascmc = swe.houses(jd, latitude, longitude, b'P')
 
@@ -212,8 +211,9 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
 
     # Store house cusp information
     textual_house_cusps = []
+    # swe.houses returns 0-indexed array for 12 houses. houses[0] is cusp 1 (Ascendant).
     for i in range(1, 13): # Houses are 1-12
-        cusp_lon = houses[i-1] # swe.houses returns 0-indexed array for 12 houses
+        cusp_lon = houses[i-1]
         sign_at_cusp = get_sign(cusp_lon)
         degree_in_sign = get_degree_in_sign(cusp_lon)
         degrees = int(degree_in_sign)
@@ -221,7 +221,7 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
         textual_house_cusps.append(f"Casa {i}: {degrees}°{minutes:02d}' {sign_unicode_symbols.get(sign_at_cusp, '')} {sign_at_cusp}")
 
     # =============================================================================
-    # VISUALIZAÇÃO GRÁFICA - MAPA ASTROLÓGICO (Mantido do seu código)
+    # VISUALIZAÇÃO GRÁFICA - MAPA ASTROLÓGICO
     # =============================================================================
     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': 'polar'})
 
@@ -234,33 +234,33 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
     ax.grid(False)
 
     # Configurações de posição e espaçamento
-    image_center_r = 0.90
+    image_center_r = 0.90 # Radial position for the center of the planet images
     degree_text_r = 0.80
     minutes_text_r = 0.72
 
-    # AJUSTES PARA O TRAÇO DOS PLANETAS
+    # Radial positions for the tick mark for each planet (from outer edge)
     planet_tick_r_outer = 1.0
     planet_tick_r_inner = 0.98
     planet_tick_linewidth = 1.5
     planet_tick_linestyle = '-'
 
-    # AJUSTES PARA O TRAÇO DOS PLANETAS 2
+    # Radial positions for the tick marks for planets near the inner circle (for aspects)
     planet_tick_r_outer_inner_circle = 0.55
     planet_tick_r_inner_circle = 0.53
 
-    # Para o ajuste angular (lateral)
+    # For angular adjustment (lateral) to prevent symbol overlap
     angular_overlap_threshold_degrees = 4.0
     angular_offset_step_degrees = 4.0
 
-    # Tamanhos das fontes
+    # Font sizes
     degree_text_fontsize = 10
     minutes_text_fontsize = 8
 
-    # Reorganiza planetas para calcular ajustes de sobreposição angular
+    # Reorganize planets to calculate angular overlap adjustments
     processed_planets_drawing_info = []
     sorted_planets = sorted(planet_positions, key=lambda p: p['lon'])
 
-    # Lógica para aplicar offsets angulares
+    # Logic to apply angular offsets
     occupied_angular_slots = []
 
     for p_data in sorted_planets:
@@ -312,24 +312,24 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
 
     planet_plot_info_map = {p['name']: p for p in processed_planets_drawing_info}
 
-    # Desenha cúspides das casas (linhas divisórias)
+    # Draw house cusps (divider lines)
     for cusp_lon in houses:
         angle = np.radians(cusp_lon)
         ax.plot([angle, angle], [0.55, 1.0], color='gray', linestyle='-', linewidth=1.5)
 
-    # Desenha círculo externo (zodíaco)
+    # Draw outer circle (zodiac)
     circle_outer = plt.Circle((0, 0), 1.0, transform=ax.transData._b, fill=False, color='black', linewidth=1.5)
     ax.add_artist(circle_outer)
 
-    # Desenha o círculo interno (representando o centro do mapa) mais forte
+    # Draw inner circle (representing the center of the map) stronger
     circle_inner = plt.Circle((0, 0), 0.55, transform=ax.transData._b, fill=False, color='gray', linewidth=1.5)
     ax.add_artist(circle_inner)
 
-    # Desenha uma nova camada de circulo interno
+    # Draw another layer of inner circle
     circle_inner_outer = plt.Circle((0, 0), 0.65, transform=ax.transData._b, fill=False, color='gray', linewidth=1.5)
     ax.add_artist(circle_inner_outer)
 
-    # Escrever o número de cada casa no centro angular entre cúspides
+    # Write house numbers in the angular center between cusps
     house_number_r = 0.6
 
     for i in range(12):
@@ -345,7 +345,7 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
         ax.text(angle_center, house_number_r, str(i + 1),
                 fontsize=14, ha='center', va='center', weight='bold')
 
-    # --- DESENHO DAS DIVISÕES DOS SIGNOS E SEUS SÍMBOLOS ---
+    # --- DRAW SIGN DIVISIONS AND THEIR SYMBOLS ---
     sign_line_r_inner = 1
     sign_line_r_outer = 1.05
 
@@ -367,14 +367,14 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
 
         ax.text(angle_center, 1.040, sign_sym, fontsize=18, ha='center', va='center', weight='bold', color=color)
 
-    # --- DESENHO DOS PLANETAS COM AJUSTES ANGULARES E TRAÇOS ---
+    # --- DRAW PLANETS WITH ANGULAR ADJUSTMENTS AND TICKS ---
     textual_planet_positions = []
     for p_info in processed_planets_drawing_info:
         planet_name = p_info['name']
         original_lon = p_info['original_lon']
         adjusted_lon = p_info['adjusted_lon']
 
-        # Add to textual planet positions
+        # Add to textual planet positions for the "Details" tab
         sign_of_planet = get_sign(original_lon)
         degree_in_sign = get_degree_in_sign(original_lon)
         degrees = int(degree_in_sign)
@@ -382,8 +382,15 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
         textual_planet_positions.append(f"{planet_name} {planet_unicode_symbols.get(planet_name, '')}: {degrees}°{minutes:02d}' {sign_unicode_symbols.get(sign_of_planet, '')} {sign_of_planet} ({original_lon:.2f}°)")
 
         original_angle = np.radians(original_lon)
-        ax.plot([original_angle, original_angle], [planet_tick_r_inner_circle, planet_tick_r_outer_inner_circle], # Draw tick mark for planet
+
+        # 1. First tick mark: Near the outer zodiac ring (fixed)
+        ax.plot([original_angle, original_angle], [planet_tick_r_inner, planet_tick_r_outer],
                 color='black', linewidth=planet_tick_linewidth, linestyle=planet_tick_linestyle)
+
+        # 2. Second tick mark: Near the inner aspect circle (re-added)
+        ax.plot([original_angle, original_angle], [planet_tick_r_inner_circle, planet_tick_r_outer_inner_circle],
+                color='black', linewidth=planet_tick_linewidth, linestyle=planet_tick_linestyle)
+
 
         adjusted_angle = np.radians(adjusted_lon)
 
@@ -396,11 +403,11 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
             ax.add_artist(ab)
         else:
             # Fallback to text symbol if image not found
-            planet_symbol = planet_unicode_symbols.get(planet_name, '?') # Use specific planet unicode symbols
+            planet_symbol = planet_unicode_symbols.get(planet_name, '?')
             ax.text(adjusted_angle, image_center_r, planet_symbol,
                     fontsize=16, ha='center', va='center', weight='bold')
 
-
+        # Display degrees and minutes near the planet symbol
         degree_decimal = original_lon % 30
         degrees = int(degree_decimal)
         minutes = int((degree_decimal - degrees) * 60)
@@ -413,8 +420,9 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
 
         ax.text(adjusted_angle, minutes_text_r, minutes_text,
                 fontsize=minutes_text_fontsize, ha='center', va='center')
+
     # =============================================================================
-    # DESENHO DAS LINHAS DE ASPECTO (Mantido do seu código)
+    # DRAW ASPECT LINES
     # =============================================================================
     for aspect_info in aspect_lines_info:
         name1 = aspect_info['planet1']
@@ -427,12 +435,12 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
         angle1 = np.radians(lon1)
         angle2 = np.radians(lon2)
 
-        aspect_radial_pos = 0.53
+        aspect_radial_pos = 0.53 # Radial position for aspect lines
         ax.plot([angle1, angle2], [aspect_radial_pos, aspect_radial_pos],
                 color=color, linewidth=1.5, linestyle='-')
 
     # =============================================================================
-    # FINALIZAÇÃO E EXIBIÇÃO DENTRO DO TKINTER
+    # FINALIZATION AND DISPLAY WITHIN TKINTER
     # =============================================================================
     ax.set_title(f"Mapa Astral para {birth_date.strftime('%Y-%m-%d %H:%M')}\n{location_input_str} (Lat: {latitude:.2f}, Lon: {longitude:.2f})", y=1.08, fontsize=14)
     plt.tight_layout()
@@ -445,7 +453,7 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
     # Add Matplotlib navigation toolbar
     toolbar = NavigationToolbar2Tk(canvas, chart_frame)
     toolbar.update()
-    canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=True) # Re-pack to ensure toolbar is visible
 
     # Populate the details text widget
     details_text_widget.config(state=tk.NORMAL) # Enable editing
@@ -472,7 +480,6 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
         details_text_widget.insert(tk.END, "Nenhum aspecto maior encontrado com orbe de 8°.\n")
     details_text_widget.insert(tk.END, "\n")
 
-
     details_text_widget.config(state=tk.DISABLED) # Disable editing
 
     return fig # Return the figure to manage its lifecycle
@@ -493,6 +500,12 @@ def create_gui():
         if fig is not None:
             plt.close(fig)
             fig = None
+        # Also clear the details text when going back
+        if details_text_widget is not None:
+            details_text_widget.config(state=tk.NORMAL)
+            details_text_widget.delete(1.0, tk.END)
+            details_text_widget.config(state=tk.DISABLED)
+
 
     def on_calculate():
         date_input = date_entry.get()
@@ -512,6 +525,7 @@ def create_gui():
         if plotted_fig: # If plotting was successful, show the notebook
             notebook.pack(fill=tk.BOTH, expand=True)
             notebook.select(chart_tab) # Automatically switch to the chart tab
+            manage_back_button_visibility() # Ensure back button is shown
         else: # If plotting failed, go back to input frame
             show_input_frame()
 
@@ -529,22 +543,22 @@ def create_gui():
     style.configure("TLabel", font=("Arial", 10))
     style.configure("TEntry", font=("Arial", 10))
     style.configure("TButton", font=("Arial", 10, "bold"))
-    style.configure("TNotebook.Tab", font=("Arial", 10, "bold"))
+    style.configure("TNotebook.Tab", font=("Arial", 10, "bold")) # Style for tabs
 
     ttk.Label(input_frame, text="Data (AAAA-MM-DD):").grid(row=0, column=0, sticky=tk.W, pady=5)
     date_entry = ttk.Entry(input_frame, width=30)
     date_entry.grid(row=0, column=1, pady=5)
-    date_entry.insert(0, "2003-08-15") # Valor padrão para teste
+    date_entry.insert(0, "2003-08-15") # Default value for testing
 
     ttk.Label(input_frame, text="Hora (HH:MM):").grid(row=1, column=0, sticky=tk.W, pady=5)
     time_entry = ttk.Entry(input_frame, width=30)
     time_entry.grid(row=1, column=1, pady=5)
-    time_entry.insert(0, "21:30") # Valor padrão para teste
+    time_entry.insert(0, "21:30") # Default value for testing
 
     ttk.Label(input_frame, text="Local de Nascimento (Cidade, País):").grid(row=2, column=0, sticky=tk.W, pady=5)
     location_entry = ttk.Entry(input_frame, width=30)
     location_entry.grid(row=2, column=1, pady=5)
-    location_entry.insert(0, "Rio de Janeiro, Brazil") # Valor padrão para teste
+    location_entry.insert(0, "Rio de Janeiro, Brazil") # Default value for testing
 
     calculate_button = ttk.Button(input_frame, text="Gerar Mapa Astral", command=on_calculate)
     calculate_button.grid(row=3, column=0, columnspan=2, pady=20)
@@ -570,8 +584,7 @@ def create_gui():
     details_frame = ttk.Frame(details_tab) # Frame to hold the textual details
     details_frame.pack(fill=tk.BOTH, expand=True)
 
-    # Text widget for details (using scrolledtext for scrollability)
-    # It's better to use tk.Text directly and add a scrollbar manually for more control
+    # Text widget for details (using tk.Text and a Scrollbar for better control)
     details_text_widget = tk.Text(details_frame, wrap=tk.WORD, state=tk.DISABLED,
                                   font=("Courier New", 10), padx=10, pady=10)
     details_text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -583,11 +596,12 @@ def create_gui():
     # Button to return to input form (visible in both chart and details tabs)
     # Placed outside the notebook for consistent visibility
     back_button = ttk.Button(root, text="Voltar ao Questionário", command=show_input_frame)
-    back_button.pack(side=tk.BOTTOM, pady=10)
+    back_button.pack(side=tk.BOTTOM, pady=10) # Initially pack it
 
     # Initially hide the back button and notebook until a chart is generated
-    back_button.pack_forget()
+    back_button.pack_forget() # Hide it immediately after packing
     notebook.pack_forget()
+
 
     # Function to manage showing/hiding back button based on current frame
     def manage_back_button_visibility():
@@ -595,9 +609,6 @@ def create_gui():
             back_button.pack_forget()
         else:
             back_button.pack(side=tk.BOTTOM, pady=10)
-
-    # Bind this function to notebook tab change (optional, but good for robustness)
-    notebook.bind("<<NotebookTabChanged>>", lambda event: manage_back_button_visibility())
 
     # Set up window close protocol to ensure Matplotlib figures are closed
     def on_closing():
