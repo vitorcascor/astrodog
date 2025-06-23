@@ -4,7 +4,6 @@ import pytz
 import matplotlib.pyplot as plt
 import numpy as np
 import tkinter as tk
-from tkinter import Canvas, PhotoImage # Not directly used for chart, but kept from original
 from tkinter import ttk, messagebox
 from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
@@ -49,9 +48,11 @@ planet_unicode_symbols = {
     'Jupiter': '♃', 'Saturn': '♄', 'Uranus': '♅', 'Neptune': '♆', 'Pluto': '♇'
 }
 
-
-planets = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter',
-           'Saturn', 'Uranus', 'Neptune', 'Pluto']
+# Define planets for natal and horary charts
+NATAL_PLANETS = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter',
+                 'Saturn', 'Uranus', 'Neptune', 'Pluto']
+HORARY_PLANETS = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter',
+                  'Saturn'] # Exclude Uranus, Neptune, Pluto for horary
 
 signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
          'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
@@ -84,6 +85,9 @@ canvas = None
 toolbar = None
 fig = None
 details_text_widget = None # To hold the Text widget for details tab
+notebook = None # Will be defined in create_gui
+input_frame = None # Will be defined in create_gui
+back_button = None # Will be defined in create_gui
 
 # Helper function to get sign from longitude
 def get_sign(longitude):
@@ -96,7 +100,7 @@ def get_degree_in_sign(longitude):
 # =============================================================================
 # FUNÇÃO PARA CALCULAR E PLOTAR O MAPA ASTRAL (adaptada para a GUI)
 # =============================================================================
-def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, details_frame):
+def plot_astral_chart(chart_type, house_system, date_str, time_str, location_input_str, chart_frame, details_frame):
     global canvas, toolbar, fig, details_text_widget
 
     # Clear previous plot if it exists
@@ -138,20 +142,35 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
         messagebox.showerror("Erro de Geocodificação", f"Ocorreu um erro ao buscar a localização: {e}")
         return None # Return None to indicate failure
 
-    # 2. Processamento de Data e Hora (como no seu código)
+    # 2. Processamento de Data e Hora
     try:
-        birth_date = datetime.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-        timezone = pytz.timezone(timezone_id)
-        birth_date = timezone.localize(birth_date)
+        if chart_type == 'natal':
+            birth_date = datetime.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+        elif chart_type == 'horary':
+            # Use current time for horary, and get current time for display
+            # Ensure the current time is localized to the specified location's timezone
+            # before converting to UTC for swe.julday.
+            current_local_time = datetime.datetime.now()
+            local_timezone = pytz.timezone(timezone_id)
+            birth_date = local_timezone.localize(current_local_time)
+
+            date_str = birth_date.strftime("%Y-%m-%d") # Update date_str for display
+            time_str = birth_date.strftime("%H:%M") # Update time_str for display
+
         utc_birth_date = birth_date.astimezone(pytz.utc)
+
     except ValueError:
         messagebox.showerror("Erro de Data/Hora", "Formato de data ou hora inválido. Use AAAA-MM-DD e HH:MM.")
         return None # Return None to indicate failure
     except pytz.UnknownTimeZoneError:
         messagebox.showwarning("Fuso Horário", "Fuso horário inválido. Usando UTC por padrão.")
+        # Re-attempt localization with UTC if original timezone was bad
         timezone = pytz.utc
-        birth_date = timezone.localize(birth_date)
+        # If birth_date was already localized with a bad timezone, re-localize it correctly
+        # If it wasn't localized (e.g. from datetime.now() for horary, it will be localized now)
+        birth_date = timezone.localize(birth_date.replace(tzinfo=None)) # Remove old tzinfo if present
         utc_birth_date = birth_date.astimezone(pytz.utc)
+
 
     jd = swe.julday(utc_birth_date.year, utc_birth_date.month, utc_birth_date.day,
                     utc_birth_date.hour + utc_birth_date.minute / 60.0)
@@ -159,11 +178,23 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
     # =============================================================================
     # CÁLCULO DAS POSIÇÕES PLANETÁRIAS
     # =============================================================================
+    planets_to_calculate = NATAL_PLANETS if chart_type == 'natal' else HORARY_PLANETS
+
     planet_positions = []
-    for i, name in enumerate(planets):
-        xx = swe.calc_ut(jd, i, swe.FLG_SWIEPH)[0]
-        lon = xx[0]
-        planet_positions.append({'name': name, 'lon': lon})
+    # Map planet names to SWISSEPH constants
+    swe_planets_map = {
+        'Sun': swe.SUN, 'Moon': swe.MOON, 'Mercury': swe.MERCURY,
+        'Venus': swe.VENUS, 'Mars': swe.MARS, 'Jupiter': swe.JUPITER,
+        'Saturn': swe.SATURN, 'Uranus': swe.URANUS, 'Neptune': swe.NEPTUNE,
+        'Pluto': swe.PLUTO
+    }
+
+    for name in planets_to_calculate:
+        swe_id = swe_planets_map.get(name)
+        if swe_id is not None:
+            xx = swe.calc_ut(jd, swe_id, swe.FLG_SWIEPH)[0]
+            lon = xx[0]
+            planet_positions.append({'name': name, 'lon': lon})
 
     # =============================================================================
     # ANÁLISE E DESENHO DE ASPECTOS
@@ -202,9 +233,19 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
                 textual_aspects.append(f"{name1} {planet_unicode_symbols.get(name1, '')} - {name2} {planet_unicode_symbols.get(name2, '')}: {aspect_name} ({actual_diff:.2f}°)")
 
     # =============================================================================
-    # SISTEMA DE CASAS (PLACIDUS)
+    # SISTEMA DE CASAS
     # =============================================================================
-    houses, ascmc = swe.houses(jd, latitude, longitude, b'P')
+    # Select house system flag
+    if house_system == 'Placidus':
+        house_system_flag = b'P'
+    elif house_system == 'Regiomontanus':
+        house_system_flag = b'R'
+    else: # Default to Placidus if unknown
+        house_system_flag = b'P'
+        messagebox.showwarning("Sistema de Casas", f"Sistema de casas '{house_system}' não reconhecido. Usando Placidus.")
+
+
+    houses, ascmc = swe.houses(jd, latitude, longitude, house_system_flag)
 
     asc = ascmc[0]
     mc = ascmc[1]
@@ -383,11 +424,11 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
 
         original_angle = np.radians(original_lon)
 
-        # 1. First tick mark: Near the outer zodiac ring (fixed)
+        # 1. First tick mark: Near the outer zodiac ring
         ax.plot([original_angle, original_angle], [planet_tick_r_inner, planet_tick_r_outer],
                 color='black', linewidth=planet_tick_linewidth, linestyle=planet_tick_linestyle)
 
-        # 2. Second tick mark: Near the inner aspect circle (re-added)
+        # 2. Second tick mark: Near the inner aspect circle
         ax.plot([original_angle, original_angle], [planet_tick_r_inner_circle, planet_tick_r_outer_inner_circle],
                 color='black', linewidth=planet_tick_linewidth, linestyle=planet_tick_linestyle)
 
@@ -442,7 +483,8 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
     # =============================================================================
     # FINALIZATION AND DISPLAY WITHIN TKINTER
     # =============================================================================
-    ax.set_title(f"Mapa Astral para {birth_date.strftime('%Y-%m-%d %H:%M')}\n{location_input_str} (Lat: {latitude:.2f}, Lon: {longitude:.2f})", y=1.08, fontsize=14)
+    chart_title_type = "Mapa Natal" if chart_type == 'natal' else "Mapa Horário"
+    ax.set_title(f"{chart_title_type} ({house_system} Houses) para {birth_date.strftime('%Y-%m-%d %H:%M')}\n{location_input_str} (Lat: {latitude:.2f}, Lon: {longitude:.2f})", y=1.08, fontsize=14)
     plt.tight_layout()
 
     # Create a Tkinter canvas and embed the Matplotlib figure
@@ -459,7 +501,7 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
     details_text_widget.config(state=tk.NORMAL) # Enable editing
     details_text_widget.delete(1.0, tk.END) # Clear previous content
 
-    details_text_widget.insert(tk.END, f"--- Detalhes do Mapa Astral para {birth_date.strftime('%Y-%m-%d %H:%M')} ---\n\n")
+    details_text_widget.insert(tk.END, f"--- Detalhes do {chart_title_type} ({house_system} Houses) para {birth_date.strftime('%Y-%m-%d %H:%M')} ---\n\n")
     details_text_widget.insert(tk.END, f"Local: {location_input_str} (Lat: {latitude:.2f}, Lon: {longitude:.2f}, Fuso: {timezone_id})\n\n")
 
     details_text_widget.insert(tk.END, "=== Posições Planetárias ===\n")
@@ -489,12 +531,35 @@ def plot_astral_chart(date_str, time_str, location_input_str, chart_frame, detai
 # INTERFACE GRÁFICA (Tkinter)
 # =============================================================================
 def create_gui():
-    global details_text_widget # Declare as global to access it
+    global details_text_widget, notebook, input_frame, back_button # Declare as global to access them
+
+    def update_input_fields_state():
+        if chart_type_var.get() == 'horary':
+            date_entry.config(state=tk.DISABLED)
+            time_entry.config(state=tk.DISABLED)
+            # Clear date/time for horary mode for clarity
+            date_entry.delete(0, tk.END)
+            time_entry.delete(0, tk.END)
+            date_entry.insert(0, "Tempo Atual") # Placeholder
+            time_entry.insert(0, "Tempo Atual") # Placeholder
+        else: # 'natal'
+            date_entry.config(state=tk.NORMAL)
+            time_entry.config(state=tk.NORMAL)
+            # Restore default values or leave blank for user input
+            date_entry.delete(0, tk.END)
+            time_entry.delete(0, tk.END)
+            date_entry.insert(0, "2003-08-15")
+            time_entry.insert(0, "21:30")
+
 
     def show_input_frame():
-        # Hide all other frames and show the input frame
-        notebook.pack_forget() # Hide the notebook
+        # Hide the notebook
+        notebook.pack_forget()
+        # Show the input frame
         input_frame.pack(fill=tk.BOTH, expand=True)
+        # Hide the back button
+        back_button.place_forget()
+
         # Close the Matplotlib figure when returning to input frame
         global fig
         if fig is not None:
@@ -508,26 +573,35 @@ def create_gui():
 
 
     def on_calculate():
-        date_input = date_entry.get()
-        time_input = time_entry.get()
+        chart_type = chart_type_var.get()
+        house_system = house_system_var.get()
         location_input = location_entry.get()
 
-        if not all([date_input, time_input, location_input]):
-            messagebox.showwarning("Entrada Inválida", "Por favor, preencha todos os campos.")
+        date_input = date_entry.get()
+        time_input = time_entry.get()
+
+        if not location_input:
+            messagebox.showwarning("Entrada Inválida", "Por favor, forneça uma localização.")
+            return
+
+        if chart_type == 'natal' and (not date_input or not time_input):
+            messagebox.showwarning("Entrada Inválida", "Para o Mapa Natal, a data e a hora são obrigatórias.")
             return
 
         # Hide input frame
         input_frame.pack_forget()
 
         # Try to plot the chart and update details
-        plotted_fig = plot_astral_chart(date_input, time_input, location_input, chart_frame, details_frame)
+        plotted_fig = plot_astral_chart(chart_type, house_system, date_input, time_input, location_input, chart_frame, details_frame)
 
-        if plotted_fig: # If plotting was successful, show the notebook
-            notebook.pack(fill=tk.BOTH, expand=True)
+        if plotted_fig: # If plotting was successful
+            # Pack the notebook
+            notebook.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             notebook.select(chart_tab) # Automatically switch to the chart tab
-            manage_back_button_visibility() # Ensure back button is shown
+            # Show the back button in the top-right corner
+            back_button.place(relx=1.0, rely=0.0, anchor=tk.NE, x=-10, y=10)
         else: # If plotting failed, go back to input frame
-            show_input_frame()
+            show_input_frame() # This will hide the button if plotting failed
 
 
     root = tk.Tk()
@@ -537,7 +611,7 @@ def create_gui():
 
     # --- Input Frame (Initial screen) ---
     input_frame = ttk.Frame(root, padding="20")
-    input_frame.pack(fill=tk.BOTH, expand=True)
+    input_frame.pack(fill=tk.BOTH, expand=True) # Initially visible
 
     style = ttk.Style()
     style.configure("TLabel", font=("Arial", 10))
@@ -545,32 +619,49 @@ def create_gui():
     style.configure("TButton", font=("Arial", 10, "bold"))
     style.configure("TNotebook.Tab", font=("Arial", 10, "bold")) # Style for tabs
 
-    ttk.Label(input_frame, text="Data (AAAA-MM-DD):").grid(row=0, column=0, sticky=tk.W, pady=5)
+    # Chart Type Selection
+    ttk.Label(input_frame, text="Tipo de Mapa:").grid(row=0, column=0, sticky=tk.W, pady=5)
+    chart_type_var = tk.StringVar(value='natal') # Default to Natal
+    natal_radio = ttk.Radiobutton(input_frame, text="Mapa Natal", variable=chart_type_var, value='natal', command=update_input_fields_state)
+    natal_radio.grid(row=0, column=1, sticky=tk.W, pady=5)
+    horary_radio = ttk.Radiobutton(input_frame, text="Mapa Horário (Tempo Real)", variable=chart_type_var, value='horary', command=update_input_fields_state)
+    horary_radio.grid(row=1, column=1, sticky=tk.W, pady=5)
+
+
+    ttk.Label(input_frame, text="Data (AAAA-MM-DD):").grid(row=2, column=0, sticky=tk.W, pady=5)
     date_entry = ttk.Entry(input_frame, width=30)
-    date_entry.grid(row=0, column=1, pady=5)
+    date_entry.grid(row=2, column=1, pady=5)
     date_entry.insert(0, "2003-08-15") # Default value for testing
 
-    ttk.Label(input_frame, text="Hora (HH:MM):").grid(row=1, column=0, sticky=tk.W, pady=5)
+    ttk.Label(input_frame, text="Hora (HH:MM):").grid(row=3, column=0, sticky=tk.W, pady=5)
     time_entry = ttk.Entry(input_frame, width=30)
-    time_entry.grid(row=1, column=1, pady=5)
+    time_entry.grid(row=3, column=1, pady=5)
     time_entry.insert(0, "21:30") # Default value for testing
 
-    ttk.Label(input_frame, text="Local de Nascimento (Cidade, País):").grid(row=2, column=0, sticky=tk.W, pady=5)
+    ttk.Label(input_frame, text="Local (Cidade, País):").grid(row=4, column=0, sticky=tk.W, pady=5)
     location_entry = ttk.Entry(input_frame, width=30)
-    location_entry.grid(row=2, column=1, pady=5)
+    location_entry.grid(row=4, column=1, pady=5)
     location_entry.insert(0, "Rio de Janeiro, Brazil") # Default value for testing
 
+    # House System Selection
+    ttk.Label(input_frame, text="Sistema de Casas:").grid(row=5, column=0, sticky=tk.W, pady=5)
+    house_system_var = tk.StringVar(value='Placidus') # Default to Placidus
+    house_system_dropdown = ttk.Combobox(input_frame, textvariable=house_system_var,
+                                        values=['Placidus', 'Regiomontanus'], state='readonly', width=28)
+    house_system_dropdown.grid(row=5, column=1, sticky=tk.W, pady=5)
+
+
     calculate_button = ttk.Button(input_frame, text="Gerar Mapa Astral", command=on_calculate)
-    calculate_button.grid(row=3, column=0, columnspan=2, pady=20)
+    calculate_button.grid(row=6, column=0, columnspan=2, pady=20)
 
     input_frame.columnconfigure(0, weight=1)
     input_frame.columnconfigure(1, weight=1)
-    for i in range(4):
+    for i in range(7): # Adjusted row count for new inputs
         input_frame.rowconfigure(i, weight=1)
 
     # --- Notebook (Tabbed Interface for Chart and Details) ---
     notebook = ttk.Notebook(root)
-    # This will be packed only after a chart is generated
+    # This will be packed dynamically by on_calculate
 
     # --- Chart Tab ---
     chart_tab = ttk.Frame(notebook)
@@ -593,22 +684,10 @@ def create_gui():
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     details_text_widget.config(yscrollcommand=scrollbar.set)
 
-    # Button to return to input form (visible in both chart and details tabs)
-    # Placed outside the notebook for consistent visibility
+    # --- "Back to Questionnaire" Button ---
+    # Create the button directly in the root window and manage with place()
     back_button = ttk.Button(root, text="Voltar ao Questionário", command=show_input_frame)
-    back_button.pack(side=tk.BOTTOM, pady=10) # Initially pack it
-
-    # Initially hide the back button and notebook until a chart is generated
-    back_button.pack_forget() # Hide it immediately after packing
-    notebook.pack_forget()
-
-
-    # Function to manage showing/hiding back button based on current frame
-    def manage_back_button_visibility():
-        if input_frame.winfo_ismapped():
-            back_button.pack_forget()
-        else:
-            back_button.pack(side=tk.BOTTOM, pady=10)
+    back_button.place_forget() # Initially hidden
 
     # Set up window close protocol to ensure Matplotlib figures are closed
     def on_closing():
@@ -618,6 +697,9 @@ def create_gui():
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_closing)
+
+    # Initial state update for input fields
+    update_input_fields_state()
 
     root.mainloop()
 
