@@ -5,9 +5,10 @@ from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
 import numpy as np
 
+# Supondo que essas constantes vêm de seu arquivo constants.py
 from .constants import (
     NATAL_POINTS_CALCULABLE, HORARY_POINTS_CALCULABLE,
-    RETROGRADE_PLANETS, SIGNS
+    RETROGRADE_PLANETS, SIGNS # Certifique-se de que SIGNS está definido
 )
 
 class AstrologicalData:
@@ -35,6 +36,29 @@ class AstrologicalData:
         except Exception as e:
             return None, None, None, f"Erro ao buscar localização: {e}"
 
+    def _is_day_chart(self, sun_lon, houses):
+        """
+        Determina se o mapa é diurno ou noturno.
+        Um mapa é diurno se o Sol está acima do horizonte (Casas 7 a 12).
+        houses[0] é o Ascendente (Cúspide da Casa 1)
+        houses[6] é o Descendente (Cúspide da Casa 7)
+        """
+        asc_lon = houses[0]
+        des_lon = (houses[0] + 180) % 360 # Descendente é 180 graus do Ascendente
+
+        # Normaliza longitudes para um range contínuo se necessário para comparação
+        # Isso lida com o cruzar de 0/360 graus
+        if des_lon < asc_lon:
+            if sun_lon >= asc_lon or sun_lon < des_lon:
+                return True # Sol no hemisfério superior
+            else:
+                return False # Sol no hemisfério inferior
+        else:
+            if sun_lon >= asc_lon and sun_lon < des_lon:
+                return False # Sol no hemisfério inferior
+            else:
+                return True # Sol no hemisfério superior
+
     def calculate_chart_data(self, chart_type, house_system, date_str, time_str, latitude, longitude, timezone_id):
         """
         Calcula as posições dos planetas, nodos, Part of Fortune e cúspides das casas.
@@ -57,12 +81,10 @@ class AstrologicalData:
                 'Sun': swe.SUN, 'Moon': swe.MOON, 'Mercury': swe.MERCURY,
                 'Venus': swe.VENUS, 'Mars': swe.MARS, 'Jupiter': swe.JUPITER,
                 'Saturn': swe.SATURN, 'Uranus': swe.URANUS, 'Neptune': swe.NEPTUNE,
-                'Pluto': swe.PLUTO, 'True Node': swe.MEAN_NODE
+                'Pluto': swe.PLUTO, 'True Node': swe.MEAN_NODE # Ou swe.TRUE_NODE se preferir
             }
 
             points_to_calculate = NATAL_POINTS_CALCULABLE if chart_type == 'natal' else HORARY_POINTS_CALCULABLE
-
-            #
 
             for name in points_to_calculate:
                 if name in swe_points_map:
@@ -83,20 +105,31 @@ class AstrologicalData:
                         'speed': speed
                     })
 
-
             # Calculate Houses
-            # The 'P' or 'R' needs to be bytes for swisseph
             houses_bytes = b'P' if house_system == 'Placidus' else b'R'
             houses, ascmc = swe.houses(jd, latitude, longitude, houses_bytes)
             asc = ascmc[0]
             mc = ascmc[1]
 
-            # Calculate Fortune (Asc + Moon - Sun)
+            # --- MODIFICAÇÃO AQUI PARA A PARTE DA FORTUNA ---
             moon_lon = next((p['lon'] for p in point_positions if p['name'] == 'Moon'), None)
             sun_lon = next((p['lon'] for p in point_positions if p['name'] == 'Sun'), None)
+
             if moon_lon is not None and sun_lon is not None:
-                fortune_lon = (asc + moon_lon - sun_lon) % 360
+                is_day_chart = self._is_day_chart(sun_lon, houses)
+
+                if is_day_chart:
+                    # Fórmula diurna: Asc + Lua - Sol
+                    fortune_lon = (asc + moon_lon - sun_lon) % 360
+                else:
+                    # Fórmula noturna: Asc - Lua + Sol
+                    fortune_lon = (asc - moon_lon + sun_lon) % 360
+                    # Garante que o resultado seja positivo
+                    if fortune_lon < 0:
+                        fortune_lon += 360
+
                 point_positions.append({'name': 'Fortune', 'lon': fortune_lon, 'retrograde': False, 'speed': 0})
+            # --- FIM DA MODIFICAÇÃO ---
             
             # Calculate South Node (180 degrees opposite to True Node)
             true_node_lon = next((p['lon'] for p in point_positions if p['name'] == 'True Node'), None)
@@ -179,7 +212,6 @@ class AstrologicalData:
         textual_aspects = []
         
         # Filter for actual planets for aspects (excluding nodes/fortune)
-        # Assuming you want aspects only between the main planets from PLANET_SYMBOLS_PATHS keys
         planet_names_for_aspects = [
             'Sun', 'Moon', 'Mercury', 'Venus', 'Mars',
             'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'
